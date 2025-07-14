@@ -1,11 +1,16 @@
-from transformers import pipeline
+from langchain_groq import ChatGroq
+from dotenv import load_dotenv
+load_dotenv()
+from langchain.schema import HumanMessage
+import os
 
-summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+llm = ChatGroq(
+    groq_api_key=os.getenv("GROQ_API_KEY"),
+    model_name="llama3-70b-8192"  
+)
+
 
 def summarize_text(text):
-    try:
-        chunks = [text[i:i+1000] for i in range(0, len(text), 1000)]
-        summaries = [summarizer(chunk)[0]['summary_text'] for chunk in chunks[:3]]
-        return "\n".join(summaries)
-    except Exception as e:
-        return f"⚠️ Local summarization failed: {e}"
+    prompt = f"Summarize the following document in one paragraph:\n{text[:3000]}"
+    response = llm([HumanMessage(content=prompt)])
+    return response.content

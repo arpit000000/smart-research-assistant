@@ -1,14 +1,15 @@
+from langchain_groq import ChatGroq
+from langchain.schema import HumanMessage
 import os
-import google.generativeai as genai
 from dotenv import load_dotenv
-
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-gemini_model = genai.GenerativeModel("gemini-2.0-flash")
+llm = ChatGroq(
+    groq_api_key=os.getenv("GROQ_API_KEY"),
+    model_name="llama3-70b-8192"  # ✅ Valid Groq model
+)
 
-def ask_gemini(context, question):
-    try:
-        response = gemini_model.generate_content([context[:3000], question])
-        return response.text if hasattr(response, "text") else str(response)
-    except Exception as e:
-        return f"⚠️ Gemini error: {e}"
+
+def ask_deepseek(context, question):
+    prompt = f"Context: {context[:3000]}\nQuestion: {question}\nAnswer:"
+    response = llm([HumanMessage(content=prompt)])
+    return response.content

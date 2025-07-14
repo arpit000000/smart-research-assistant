@@ -1,22 +1,64 @@
-import os
-import google.generativeai as genai
-from dotenv import load_dotenv
+from modules.llm import llm
+from langchain_core.messages import HumanMessage
+import json
+import re
 
-load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-gemini_model = genai.GenerativeModel("gemini-2.0-flash")
+def generate_mcqs(context):
+    prompt = f"""
+You are a quiz generator.
 
-def generate_questions_from_doc(text):
-    prompt = f"Generate 3 logic-based or comprehension-focused questions from the document:\n{text[:3000]}"
-    response = gemini_model.generate_content(prompt)
-    return response.text.strip().split("\n")
+Given the document below, generate 3 multiple-choice questions. For each question, include:
+1. A question
+2. Four options labeled A, B, C, D
+3. The correct answer letter
+4. A brief explanation
 
-def evaluate_answer_with_gemini(question, user_answer, context):
-    prompt = (
-        f"Document: {context[:3000]}\n"
-        f"Question: {question}\n"
-        f"User Answer: {user_answer}\n"
-        f"Evaluate the answer and give feedback with justification."
-    )
-    response = gemini_model.generate_content(prompt)
-    return response.text.strip()
+Return the result as a JSON list like:
+[
+  {{
+    "question": "...",
+    "options": ["A) ...", "B) ...", "C) ...", "D) ..."],
+    "answer": "B",
+    "explanation": "..."
+  }},
+  ...
+]
+
+Document:
+{context[:3000]}
+"""
+    response = llm([HumanMessage(content=prompt)])
+    raw_output = response.content
+    print("📤 Raw MCQ output:\n", raw_output)
+
+    # Try to extract the JSON array between square brackets
+    try:
+        json_block = re.search(r'\[(.|\n)*\]', raw_output)
+        if json_block:
+            questions = json.loads(json_block.group(0))
+            return questions
+        else:
+            raise ValueError("No JSON array found.")
+    except Exception as e:
+        print("❌ JSON parsing error:", e)
+        return [{
+            "question": "Failed to generate MCQs.",
+            "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
+            "answer": "A",
+            "explanation": f"Raw output: {raw_output[:500]}"  # limit output for debugging
+        }]
+def evaluate_mcq_answers(questions, user_answers, context):
+    score = 0
+    feedback = []
+
+    for i, q in enumerate(questions):
+        correct = q["answer"]
+        selected = user_answers.get(i, "")[0]  # Extract 'A', 'B', etc.
+
+        if selected == correct:
+            score += 1
+            feedback.append(f"✅ Correct! {q['explanation']}")
+        else:
+            feedback.append(f"❌ Incorrect. Correct answer: {correct}. {q['explanation']}")
+
+    return score, feedback
